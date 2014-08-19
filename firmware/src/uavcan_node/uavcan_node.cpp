@@ -36,6 +36,8 @@
 #include "esc_controller.hpp"
 #include "indication_controller.hpp"
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <ch.hpp>
 #include <sys/sys.h>
 #include <config/config.h>
@@ -43,6 +45,8 @@
 #include <unistd.h>
 #include <motor/motor.h>
 #include <watchdog.h>
+
+#include <uavcan/equipment/actuator/ArrayCommand.hpp>
 
 namespace uavcan_node
 {
@@ -194,6 +198,35 @@ class RestartRequestHandler: public uavcan::IRestartRequestHandler
 } restart_request_handler;
 
 /*
+ * Command propagation latency test
+ */
+void actuator_cb(const uavcan::ReceivedDataStructure<uavcan::equipment::actuator::ArrayCommand>& msg)
+{
+	float raw_command = std::numeric_limits<float>::quiet_NaN();
+
+	if (msg.actuator_id.size() == msg.command.size()) {
+		for (unsigned i = 0; i < msg.command.size(); i++) {
+			if (msg.actuator_id[i] == 0) {
+				raw_command = msg.command[i];
+				break;
+			}
+		}
+	} else if (msg.command.size() > 0) {
+		raw_command = msg.command[0];
+	} else {
+		;
+	}
+
+	if (std::isnan(raw_command)) {
+		return;
+	}
+
+	palWritePad(GPIO_PORT_TEST_A, GPIO_PIN_TEST_A, (raw_command > 0));
+
+	//::lowsyslog("Actuator %f\n", raw_command);
+}
+
+/*
  * UAVCAN spin loop
  */
 class : public chibios_rt::BaseStaticThread<3000>
@@ -240,6 +273,12 @@ class : public chibios_rt::BaseStaticThread<3000>
 		} else {
 			lowsyslog("UAVCAN: PASSIVE MODE\n");
 		}
+
+		auto actuator_sub = new uavcan::Subscriber<uavcan::equipment::actuator::ArrayCommand>(get_node());
+		if (actuator_sub->start(actuator_cb) < 0) {
+			std::abort();
+		}
+		(void)actuator_sub;  // Red pill is leaking again
 	}
 
 public:

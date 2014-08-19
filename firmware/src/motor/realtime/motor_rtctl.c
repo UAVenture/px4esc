@@ -900,7 +900,7 @@ void motor_rtctl_set_duty_cycle(float duty_cycle)
 	// We don't need a critical section to write an integer
 	_state.pwm_val = motor_pwm_compute_pwm_val(duty_cycle);
 
-#if DEBUG_BUILD
+#if 0 // DEBUG_BUILD
 	if (duty_cycle > _params.dc_testpad_threshold) {
 		TESTPAD_SET(GPIO_PORT_TEST_A, GPIO_PIN_TEST_A);
 	} else {
